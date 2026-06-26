@@ -1,65 +1,46 @@
 # Pokémon Battle Prediction
 
-Supervised learning on **50,000 labeled 1v1 battles**: given two Pokédex IDs and their stats/types, predict which combatant wins. Includes a **CatBoost** baseline and **TabPFN** benchmark on a stratified 15% holdout from the labeled set.
+Binary classifier on 50k labeled 1v1 battles: stats, types, and a type chart in; winner out. CatBoost baseline. Optional TabPFN comparison if you have a Prior Labs token.
 
-**GitHub:** [SlowKing02/Pokemon_Battle_Prediction](https://github.com/SlowKing02/Pokemon_Battle_Prediction)
-
-## Problem
-
-Pairwise binary classification: `First_Winner = 1` if the first listed Pokémon wins. Features combine stat deltas, type effectiveness (attack chart), MCA-compressed types, evolution stage, and legendary flags — the same feature philosophy as the 2018 prototype, rebuilt as a reproducible pipeline.
+Grad-school side project (2018); rebuilt the pipeline in 2026 and merged the CSVs that used to live in a separate dataset repo.
 
 ## Data
 
-Merged from the former [Pokemon_Dataset](https://github.com/SlowKing02/Pokemon_Dataset) repo into `data/raw/`:
+All under `data/raw/`:
 
-| File | Role |
-|------|------|
-| `combats_test.csv` | Labeled combats (`Test_Set=0`) + unlabeled Kaggle rows (`Test_Set=1`) |
-| `pokemon.csv` | Base stats and types |
-| `chart.csv` | Type effectiveness matrix |
-| `pokemon_species.csv` | Evolution chain metadata |
+| File | Notes |
+|------|--------|
+| `combats_test.csv` | 50k labeled rows (`Test_Set=0`); 2k Kaggle submit rows with no winner (`Test_Set=1`) |
+| `pokemon.csv` | Stats and types (`#` is row id in this file, not national dex) |
+| `chart.csv` | Type matchup multipliers |
+| `pokemon_species.csv` | Evolution metadata |
 
-Source: Kaggle-style Pokémon combat prediction task (circa 2018).
-
-## Quick start
+## Run
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# Train CatBoost + TabPFN benchmark (~2–5 min on CPU)
 python -m src.train
-
-# Predict a matchup (after training)
-python -m src.predict --a 25 --b 6
+python -m src.predict --a 163 --b 7   # after train; ids from pokemon.csv
 ```
 
-Metrics land in `outputs/metrics.json`; CatBoost model in `models/catboost.cbm`.
+Holdout is a random 15% split from the 50k labeled combats (not `Test_Set=1`, which has no labels). Metrics: `outputs/metrics.json`. Model: `models/catboost.cbm`.
 
-**TabPFN:** set `TABPFN_TOKEN` (see `.env.example`) after accepting the license at [ux.priorlabs.ai](https://ux.priorlabs.ai). Without a token, CatBoost still trains; TabPFN is skipped with a note in `metrics.json`.
+TabPFN (optional): cap 10k train rows by library limits. Set `TABPFN_TOKEN` in `.env` — see `.env.example` and https://ux.priorlabs.ai
 
 ## Layout
 
 ```text
-data/raw/           # merged CSVs
-src/
-  features.py       # vectorized feature engineering
-  train.py          # CatBoost + TabPFN on official holdout
-  predict.py        # CLI win probability
-models/             # trained artifacts (gitignored)
-outputs/            # metrics.json
-legacy/             # 2018 scripts (reference)
+src/features.py   # ETL (MCA types, stat deltas, type chart) — vectorized
+src/train.py      # CatBoost + optional TabPFN
+src/predict.py    # CLI
+legacy/           # 2018 monolith scripts
 ```
-
-## TabPFN note
-
-TabPFN is capped at **10,000 training rows** by the library; training uses a stratified subsample from the train split, evaluated on the same 15% holdout as CatBoost. The source file’s `Test_Set=1` rows have no winner labels (Kaggle submission format).
 
 ## Legacy
 
-Original monolith scripts (`Pokemon_Battle_Match.py`, `CatBoost.py`) remain at repo root for reference; use `src/` for all new work.
+`legacy/Pokemon_Battle_Match.py` and `legacy/CatBoost.py` are the original scripts. Use `src/` for anything new.
 
 ## License
 
-MIT · Pokémon data is fan/research use; not affiliated with Nintendo/Creatures/Game Freak.
+MIT. Fan/research use; not affiliated with Nintendo/Creatures/Game Freak.
