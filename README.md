@@ -12,6 +12,16 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Feature engineering
+
+70 columns per combat: MCA-compressed types, raw stats and meta for both sides, stat deltas, type-chart effectiveness, and matchup derivations (BST/offense/bulk deltas, speed ratio, shared-type flag, etc.).
+
+Full column list and rationale: [docs/FEATURES.md](docs/FEATURES.md).
+
+```bash
+python -c "from src.features import feature_column_names; print(len(feature_column_names()))"
+```
+
 ## Train and evaluate
 
 ```bash
@@ -29,7 +39,7 @@ python -m unittest tests.test_pipeline -v
 | `models/catboost.cbm` | Saved classifier |
 | `outputs/metrics.json` | Holdout metrics for CatBoost and TabPFN |
 
-Example metrics (CatBoost only): see `outputs/metrics.example.json` (~98.2% accuracy, 0.999 ROC-AUC on holdout).
+Example metrics (CatBoost only): see `outputs/metrics.example.json` (~98.5% accuracy, 0.999 ROC-AUC on holdout, 70 features).
 
 ### TabPFN comparator
 
@@ -72,6 +82,7 @@ python -m src.predict --a 163 --b 7
 
 ```text
 src/features.py   build combat matrix, train/holdout helpers, single-matchup rows
+docs/FEATURES.md   column dictionary
 src/train.py      CatBoost train + TabPFN compare
 src/predict.py    CLI
 tests/            split + feature smoke tests

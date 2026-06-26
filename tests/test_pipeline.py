@@ -7,6 +7,7 @@ import unittest
 from src.features import (
     build_combat_frame,
     build_matchup_features,
+    feature_column_names,
     labeled_combat_frame,
     train_test_split_holdout,
 )
@@ -28,8 +29,13 @@ class PipelineSmokeTest(unittest.TestCase):
 
     def test_matchup_feature_width(self) -> None:
         row = build_matchup_features(163, 7)
+        expected = len(feature_column_names())
+        self.assertEqual(row.shape[1], expected)
         frame = labeled_combat_frame()
-        self.assertEqual(row.shape[1], frame.shape[1] - 1)
+        self.assertEqual(frame.shape[1] - 1, expected)
+
+    def test_feature_count(self) -> None:
+        self.assertEqual(len(feature_column_names()), 70)
 
     def test_unlabeled_kaggle_rows_flagged(self) -> None:
         full = build_combat_frame()

@@ -1,18 +1,15 @@
-# Reference metrics from: python -m src.train --skip-tabpfn
-# Re-run locally after code changes; numbers drift slightly with CatBoost early stopping.
-
 {
   "split": {
     "train_rows": 42500,
     "test_rows": 7500,
     "test_fraction": 0.15,
     "random_seed": 42,
-    "features": 59
+    "features": 70
   },
   "catboost": {
-    "accuracy": 0.9821,
-    "roc_auc": 0.9987,
-    "log_loss": 0.0491,
+    "accuracy": 0.9852,
+    "roc_auc": 0.999,
+    "log_loss": 0.0441,
     "model_path": "models/catboost.cbm"
   },
   "tabpfn": null
