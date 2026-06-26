@@ -3,9 +3,9 @@ __pycache__/
 *.pyc
 .DS_Store
 models/
-outputs/
+outputs/*
+!outputs/metrics.example.json
 *.cbm
 catboost_info/
 .env
 !.env.example
-!outputs/metrics.example.json
