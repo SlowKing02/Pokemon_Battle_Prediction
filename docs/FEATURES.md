@@ -8,7 +8,7 @@ Total training columns: **70** (see `src.features.feature_column_names()`).
 
 | Block | Columns | Notes |
 |-------|---------|--------|
-| MCA types | 15 × 2 | `prince` MCA on `(Type_1, Type_2)` — same idea as the 2018 script |
+| MCA types | 15 × 2 | `prince` MCA on `(Type_1, Type_2)`, same as the 2018 script |
 | Base stats | HP, Attack, Defense, Sp_Atk, Sp_Def, Speed × 2 | Raw from `pokemon.csv` |
 | Meta | is_Legendary, is_Mega, is_baby, Stage × 2 | Legendary flag + evolution chain pass |
 
@@ -57,6 +57,6 @@ Combined type string is `Type_1 + Type_2` (e.g. `GrassPoison`). Chart includes p
 |----------|------|
 | `get_enriched_stats()` | Cached per-Pokémon table |
 | `build_combat_frame()` | Full labeled matrix for training |
-| `build_matchup_features(a, b)` | One row for `predict.py` — must match training columns |
+| `build_matchup_features(a, b)` | One row for `predict.py`; column order must match training |
 
 After changing features, re-run `python -m src.train` and update `outputs/metrics.example.json`.

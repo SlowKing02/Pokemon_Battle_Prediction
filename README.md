@@ -25,8 +25,8 @@ python -c "from src.features import feature_column_names; print(len(feature_colu
 ## Train and evaluate
 
 ```bash
-python -m src.train              # CatBoost + TabPFN (if TABPFN_TOKEN set)
-python -m src.train --skip-tabpfn   # CatBoost only, ~30s CPU
+python -m src.train                 # CatBoost; TabPFN if TABPFN_TOKEN in .env
+python -m src.train --skip-tabpfn   # CatBoost only (~30s CPU)
 python -m unittest tests.test_pipeline -v
 ```
 
@@ -39,26 +39,28 @@ python -m unittest tests.test_pipeline -v
 | `models/catboost.cbm` | Saved classifier |
 | `outputs/metrics.json` | Holdout metrics for CatBoost and TabPFN |
 
-Example metrics (CatBoost only): see `outputs/metrics.example.json` (~98.5% accuracy, 0.999 ROC-AUC on holdout, 70 features).
+Example metrics (CatBoost holdout): `outputs/metrics.example.json` (98.52% accuracy, 0.999 ROC-AUC, 70 features).
 
-### TabPFN comparator
+### TabPFN (optional)
 
-TabPFN fits on at most 10,000 stratified train rows (library limit), evaluates on the **same** 7,500-row holdout as CatBoost. Requires a free Prior Labs token:
+TabPFN is a second model on the same 7,500-row holdout. It fits on at most 10,000 stratified train rows (library cap). Not required for the main result.
 
-1. Accept license at https://ux.priorlabs.ai  
-2. Copy API key → `TABPFN_TOKEN` in `.env` (see `.env.example`)  
-3. Re-run `python -m src.train`
+To run it:
 
-Training prints a side-by-side table:
+1. Accept license at https://ux.priorlabs.ai
+2. Put the API key in `.env` as `TABPFN_TOKEN` (see `.env.example`)
+3. Run `python -m src.train` without `--skip-tabpfn`
+
+Side-by-side output when TabPFN succeeds:
 
 ```text
 model        accuracy    roc_auc   log_loss
 --------------------------------------------
-catboost         0.9821     0.9987     0.0491
+catboost         0.9852     0.9990     0.0441
 tabpfn           …          …          …
 ```
 
-Without a token, CatBoost still runs; `metrics.json` records the TabPFN error string.
+No token: use `--skip-tabpfn`. CatBoost metrics still write to `outputs/metrics.json`; `tabpfn` is `null` in the example file.
 
 ## Predict
 
@@ -91,7 +93,7 @@ legacy/           2018 monolith scripts (reference)
 
 ## Legacy
 
-`legacy/Pokemon_Battle_Match.py` — original RF/keras pipeline. `legacy/CatBoost.py` — early CatBoost on exported CSVs. Do not use for new runs.
+`legacy/Pokemon_Battle_Match.py`: original RF/keras pipeline. `legacy/CatBoost.py`: early CatBoost on exported CSVs. Do not use for new runs.
 
 ## License
 
