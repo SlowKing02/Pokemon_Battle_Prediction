@@ -1,8 +1,8 @@
 # Pokémon Battle Prediction
 
-Binary classifier on 50k labeled 1v1 battles. Feature engineering from the 2018 script (types, stat deltas, type chart, MCA on types); CatBoost classifier; optional TabPFN comparison on the same holdout.
+Binary classifier on 50k labeled 1v1 battles. Features come from a 2018 grad-school script (MCA on types, stat deltas, type chart); CatBoost is the main model. TabPFN runs on the same holdout if you add a token.
 
-Grad-school project, rebuilt 2026. CSVs merged from the old `Pokemon_Dataset` repo.
+CSVs merged from the old `Pokemon_Dataset` repo (2026 rebuild).
 
 ## Setup
 
@@ -12,59 +12,44 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Feature engineering
+## Features
 
-70 columns per combat: MCA-compressed types, raw stats and meta for both sides, stat deltas, type-chart effectiveness, and matchup derivations (BST/offense/bulk deltas, speed ratio, shared-type flag, etc.).
-
-Full column list and rationale: [docs/FEATURES.md](docs/FEATURES.md).
+70 columns per combat row. See [docs/FEATURES.md](docs/FEATURES.md) for the full list.
 
 ```bash
 python -c "from src.features import feature_column_names; print(len(feature_column_names()))"
 ```
 
-## Train and evaluate
+## Train
 
 ```bash
-python -m src.train                 # CatBoost; TabPFN if TABPFN_TOKEN in .env
-python -m src.train --skip-tabpfn   # CatBoost only (~30s CPU)
+python -m src.train                 # CatBoost + TabPFN when TABPFN_TOKEN is set
+python -m src.train --skip-tabpfn   # CatBoost only (~30s on CPU)
 python -m unittest tests.test_pipeline -v
 ```
 
-**Split:** stratified 85/15 from the 50k labeled rows (`Test_Set=0`). The 2,080 `Test_Set=1` rows have no winner label (Kaggle submission export); they are ignored for metrics.
+Holdout: stratified 85/15 from the 50k labeled rows (`Test_Set=0`). The 2,080 `Test_Set=1` rows have no winner label (Kaggle export); they are not used for training or metrics.
 
-**Outputs:**
-
-| Path | Contents |
-|------|----------|
+| Output | Contents |
+|--------|----------|
 | `models/catboost.cbm` | Saved classifier |
-| `outputs/metrics.json` | Holdout metrics for CatBoost and TabPFN |
+| `outputs/metrics.json` | Holdout metrics |
 
-Example metrics (CatBoost holdout): `outputs/metrics.example.json` (98.52% accuracy, 0.999 ROC-AUC, 70 features).
+Checked-in example (CatBoost, 70 features): `outputs/metrics.example.json` (98.52% accuracy, 0.999 ROC-AUC).
 
 ### TabPFN (optional)
 
-TabPFN is a second model on the same 7,500-row holdout. It fits on at most 10,000 stratified train rows (library cap). Not required for the main result.
-
-To run it:
+TabPFN fits on up to 10k stratified train rows (library cap), then scores the same 7,500-row holdout as CatBoost.
 
 1. Accept license at https://ux.priorlabs.ai
 2. Put the API key in `.env` as `TABPFN_TOKEN` (see `.env.example`)
-3. Run `python -m src.train` without `--skip-tabpfn`
+3. Run `python -m src.train`
 
-Side-by-side output when TabPFN succeeds:
-
-```text
-model        accuracy    roc_auc   log_loss
---------------------------------------------
-catboost         0.9852     0.9990     0.0441
-tabpfn           …          …          …
-```
-
-No token: use `--skip-tabpfn`. CatBoost metrics still write to `outputs/metrics.json`; `tabpfn` is `null` in the example file.
+Without a token, training still runs CatBoost and writes `"tabpfn": null` in `metrics.json`.
 
 ## Predict
 
-Ids are the `#` column in `data/raw/pokemon.csv` (not national dex).
+Ids are the `#` column in `data/raw/pokemon.csv`, not national dex numbers.
 
 ```bash
 python -m src.predict --a 163 --b 7
@@ -83,17 +68,17 @@ python -m src.predict --a 163 --b 7
 ## Layout
 
 ```text
-src/features.py   build combat matrix, train/holdout helpers, single-matchup rows
+src/features.py    combat matrix, holdout split, single-matchup rows
 docs/FEATURES.md   column dictionary
-src/train.py      CatBoost train + TabPFN compare
-src/predict.py    CLI
-tests/            split + feature smoke tests
-legacy/           2018 monolith scripts (reference)
+src/train.py       CatBoost train + optional TabPFN compare
+src/predict.py     CLI
+tests/             split and feature smoke tests
+legacy/            2018 scripts (reference only)
 ```
 
 ## Legacy
 
-`legacy/Pokemon_Battle_Match.py`: original RF/keras pipeline. `legacy/CatBoost.py`: early CatBoost on exported CSVs. Do not use for new runs.
+`legacy/Pokemon_Battle_Match.py` is the original RF/Keras pipeline. `legacy/CatBoost.py` is an early CatBoost run on exported CSVs. Use `src/` for new work.
 
 ## License
 
