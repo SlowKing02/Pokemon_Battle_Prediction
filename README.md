@@ -1,8 +1,24 @@
 # Pokémon Battle Prediction
 
-Binary classifier on 50k labeled 1v1 battles. Features come from a 2018 grad-school script (MCA on types, stat deltas, type chart); CatBoost is the main model. TabPFN runs on the same holdout if you add a token.
+Grad-school side project from 2018, cleaned up in 2026. Given two Pokémon and their base stats/types, predict who wins a simulated 1v1.
 
-CSVs merged from the old `Pokemon_Dataset` repo (2026 rebuild).
+The Kaggle-style dataset has 50,000 labeled fights and ~800 species (gens 1–6, megas included). Each row is just `(first_id, second_id, winner)`. No moves, no items, no abilities in the combat file. So most of the work is encoding what you *can* know from stats and the type chart before you touch a model.
+
+## Results (holdout, seed 42)
+
+Stratified 85/15 split on the 50k labeled rows. Same 70 features for every model.
+
+| Model | Accuracy | ROC-AUC | Log loss |
+|-------|----------|---------|----------|
+| Logistic regression | 91.85% | 0.961 | 0.234 |
+| CatBoost | **98.52%** | **0.999** | **0.044** |
+| TabPFN | pending | pending | pending |
+
+TabPFN needs a Prior Labs token **and** a one-time license click at [ux.priorlabs.ai](https://ux.priorlabs.ai). Token alone was not enough in CI-style runs; accept the license in a browser, then `python -m src.train`.
+
+CatBoost is what `predict.py` loads. The logistic gap (~7pp) is the interesting part: the features already explain a lot; boosting picks up type interactions the linear model misses.
+
+Full write-up: [docs/BENCHMARK.md](docs/BENCHMARK.md). Feature list: [docs/FEATURES.md](docs/FEATURES.md). Game/dataset notes: [docs/CONTEXT.md](docs/CONTEXT.md).
 
 ## Setup
 
@@ -10,76 +26,31 @@ CSVs merged from the old `Pokemon_Dataset` repo (2026 rebuild).
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-## Features
-
-70 columns per combat row. See [docs/FEATURES.md](docs/FEATURES.md) for the full list.
-
-```bash
-python -c "from src.features import feature_column_names; print(len(feature_column_names()))"
-```
-
-## Train
-
-```bash
-python -m src.train                 # CatBoost + TabPFN when TABPFN_TOKEN is set
-python -m src.train --skip-tabpfn   # CatBoost only (~30s on CPU)
+python -m src.train --skip-tabpfn
+python -m src.predict --a 163 --b 7   # mewtwo vs charizard
 python -m unittest tests.test_pipeline -v
 ```
 
-Holdout: stratified 85/15 from the 50k labeled rows (`Test_Set=0`). The 2,080 `Test_Set=1` rows have no winner label (Kaggle export); they are not used for training or metrics.
-
-| Output | Contents |
-|--------|----------|
-| `models/catboost.cbm` | Saved classifier |
-| `outputs/metrics.json` | Holdout metrics |
-
-Checked-in example (CatBoost, 70 features): `outputs/metrics.example.json` (98.52% accuracy, 0.999 ROC-AUC).
-
-### TabPFN (optional)
-
-TabPFN fits on up to 10k stratified train rows (library cap), then scores the same 7,500-row holdout as CatBoost.
-
-1. Accept license at https://ux.priorlabs.ai
-2. Put the API key in `.env` as `TABPFN_TOKEN` (see `.env.example`)
-3. Run `python -m src.train`
-
-Without a token, training still runs CatBoost and writes `"tabpfn": null` in `metrics.json`.
-
-## Predict
-
-Ids are the `#` column in `data/raw/pokemon.csv`, not national dex numbers.
-
-```bash
-python -m src.predict --a 163 --b 7
-# Mewtwo (#163) vs Charizard (#7)
-```
-
-## Data (`data/raw/`)
-
-| File | Role |
-|------|------|
-| `combats_test.csv` | Combats + `Test_Set` flag |
-| `pokemon.csv` | Stats, types |
-| `chart.csv` | Type effectiveness |
-| `pokemon_species.csv` | Evolution chains |
-
-## Layout
+## What's in the repo
 
 ```text
-src/features.py    combat matrix, holdout split, single-matchup rows
-docs/FEATURES.md   column dictionary
-src/train.py       CatBoost train + optional TabPFN compare
-src/predict.py     CLI
-tests/             split and feature smoke tests
-legacy/            2018 scripts (reference only)
+src/features.py    70-column combat matrix
+src/train.py       logistic + CatBoost + optional TabPFN on same holdout
+src/predict.py     load CatBoost, score one matchup
+docs/              features, benchmark notes, pokemon context
+legacy/            original 2018 scripts
 ```
 
-## Legacy
+## Data files (`data/raw/`)
 
-`legacy/Pokemon_Battle_Match.py` is the original RF/Keras pipeline. `legacy/CatBoost.py` is an early CatBoost run on exported CSVs. Use `src/` for new work.
+| File | Notes |
+|------|-------|
+| `combats_test.csv` | 50k labeled + 2,080 unlabeled Kaggle rows (`Test_Set=1`, no winner) |
+| `pokemon.csv` | Base stats, types; `#` column is the id used everywhere |
+| `chart.csv` | Type effectiveness multipliers |
+| `pokemon_species.csv` | Evolution chains for stage features |
+| `pokedex.csv` | Extra fields (abilities, type resistances); not wired in yet |
 
 ## License
 
-MIT. Fan/research use; not affiliated with Nintendo/Creatures/Game Freak.
+MIT. Fan project; not affiliated with Nintendo/Creatures/Game Freak.

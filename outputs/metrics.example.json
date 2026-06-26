@@ -6,11 +6,20 @@
     "random_seed": 42,
     "features": 70
   },
-  "catboost": {
-    "accuracy": 0.9852,
-    "roc_auc": 0.999,
-    "log_loss": 0.0441,
-    "model_path": "models/catboost.cbm"
-  },
-  "tabpfn": null
+  "benchmarks": {
+    "logistic_regression": {
+      "accuracy": 0.9185,
+      "roc_auc": 0.9605,
+      "log_loss": 0.2338
+    },
+    "catboost": {
+      "accuracy": 0.9852,
+      "roc_auc": 0.999,
+      "log_loss": 0.0441,
+      "model_path": "models/catboost.cbm"
+    },
+    "tabpfn": {
+      "error": "License not accepted at ux.priorlabs.ai (token alone insufficient until browser acceptance)"
+    }
+  }
 }

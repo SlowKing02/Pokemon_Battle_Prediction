@@ -1,62 +1,69 @@
-# Features
+# Features (70 columns)
 
-Each row is one combat: two Pokémon (first vs second). Label: `First_Winner` (1 if the first id won).
+One row per combat. Label: `First_Winner` (1 if the first pokemon id won).
 
-**70 columns** total. List from `src.features.feature_column_names()`.
+Column order: `src.features.feature_column_names()`.
 
-## Per-Pokémon blocks (`_x` = first, `_y` = second)
+## Pipeline
 
-| Block | Columns | Notes |
-|-------|---------|--------|
-| MCA types | 15 × 2 | `prince` MCA on `(Type_1, Type_2)`; same approach as the 2018 script |
-| Base stats | HP, Attack, Defense, Sp_Atk, Sp_Def, Speed × 2 | From `pokemon.csv` |
-| Meta | is_Legendary, is_Mega, is_baby, Stage × 2 | Legendary flag + evolution chain |
+```text
+pokemon.csv + chart.csv + species.csv
+  → per-mon stats (MCA types, raw stats, legendary/mega/stage)
+  → pairwise row (deltas, type chart, matchup fields)
+  → 70 floats
+```
 
-Per-mon derivations used internally (not exported as `_x/_y` columns): **BST** (sum of six stats), **Offense** (Attack + Sp_Atk), **Bulk** (HP + Defense + Sp_Def), **Mono_Type** (1 if single-typed).
+## Per-mon side (`_x` first, `_y` second)
 
-## Stat deltas (first minus second)
+| Block | Count | Source |
+|-------|-------|--------|
+| MCA types | 15 each | `prince` MCA on `(Type_1, Type_2)`; carried over from 2018 |
+| Base stats | 6 each | HP, Attack, Defense, Sp_Atk, Sp_Def, Speed |
+| Meta | 4 each | Legendary, mega, baby, evolution stage |
 
-`HP_Delta`, `Attack_Delta`, `Defense_Delta`, `Sp_Atk_Delta`, `Sp_Def_Delta`, `Speed_Delta`
+Computed internally but not exported as columns: BST, Offense, Bulk, Mono_Type.
 
-From the original notebook.
+## Stat deltas
 
-## Type chart (`chart.csv`)
+`HP_Delta` … `Speed_Delta` (first minus second). From the original notebook.
 
-| Column | Meaning |
-|--------|---------|
-| `First_Attacker_Eff` | Multiplier when first Pokémon's combined type attacks second's types |
-| `Second_Attacker_Eff` | Reverse direction |
-
-Combined type string is `Type_1 + Type_2` (e.g. `GrassPoison`). Chart includes pairwise type-product columns from the 2018 expansion.
-
-## Matchup derivations (2026)
+## Type chart
 
 | Column | Meaning |
 |--------|---------|
-| `BST_Delta` | Base-stat-total advantage |
-| `Offense_Delta` | (Attack + Sp_Atk) advantage |
-| `Bulk_Delta` | (HP + Defense + Sp_Def) advantage |
-| `Stage_Delta` | Evolution stage difference |
-| `Legendary_Gap` | `is_Legendary_x − is_Legendary_y` |
-| `Mono_Type_x`, `Mono_Type_y` | Single-type flags |
-| `Type_Eff_Delta` | `First_Attacker_Eff − Second_Attacker_Eff` |
-| `Type_Eff_LogRatio` | log ratio of the two effectiveness values |
-| `Speed_Ratio` | `Speed_x / (Speed_x + Speed_y)` |
-| `First_Speed` | 1 if first Pokémon is faster or tied |
-| `Shared_Type` | 1 if any non-None type overlaps |
+| `First_Attacker_Eff` | Multiplier for first mon's type combo vs second's types |
+| `Second_Attacker_Eff` | Reverse |
 
-## Omitted on purpose
+See [CONTEXT.md](CONTEXT.md) for how dual-type multiplication works.
 
-- Raw type one-hots (MCA is enough)
-- Pokémon names or ids in the matrix (memorization)
-- `Test_Set=1` unlabeled Kaggle rows
+## Matchup fields (2026 additions)
 
-## Code
+| Column | Meaning |
+|--------|---------|
+| `BST_Delta` | Base stat total gap |
+| `Offense_Delta` | Atk+SpA gap |
+| `Bulk_Delta` | HP+Def+SpD gap |
+| `Stage_Delta` | Evolution stage gap |
+| `Legendary_Gap` | Legendary flag difference |
+| `Mono_Type_x/y` | 1 if single-typed |
+| `Type_Eff_Delta` | First minus second attacker effectiveness |
+| `Type_Eff_LogRatio` | log ratio of effectiveness values |
+| `Speed_Ratio` | Speed share of combined speed |
+| `First_Speed` | 1 if first is faster or tied |
+| `Shared_Type` | 1 if any type overlaps |
 
-| Function | Role |
-|----------|------|
-| `get_enriched_stats()` | Cached per-Pokémon table |
-| `build_combat_frame()` | Full labeled matrix for training |
-| `build_matchup_features(a, b)` | One row for `predict.py`; must match training columns |
+## Omitted
 
-After changing features: `python -m src.train` and update `outputs/metrics.example.json`.
+- Raw type one-hots (MCA instead)
+- Names / ids in X
+- Moves, abilities, items (not in combat CSV)
+
+## Code entry points
+
+| Function | Use |
+|----------|-----|
+| `get_enriched_stats()` | Cached per-mon table |
+| `build_combat_frame()` | Full labeled matrix |
+| `build_matchup_features(a, b)` | Single row for predict; must match train columns |
+
+After edits: `python -m src.train` and refresh `outputs/metrics.example.json`.

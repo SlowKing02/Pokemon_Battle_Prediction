@@ -1,4 +1,5 @@
-"""Feature engineering for 1v1 battle outcome prediction."""
+# Build the combat feature matrix from pokemon.csv, chart.csv, species.csv.
+# Started from my 2018 grad-school script; 2026 pass added matchup deltas.
 
 from __future__ import annotations
 
@@ -12,13 +13,10 @@ import prince
 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "raw"
 
 STAT_COLS = ["HP", "Attack", "Defense", "Sp_Atk", "Sp_Def", "Speed"]
-
 MCA_COLS = [f"mca_{i}" for i in range(15)]
 META_COLS = ["is_Legendary", "is_Mega", "is_baby", "Stage"]
-PER_MON_DERIVED = ["BST", "Offense", "Bulk", "Mono_Type"]
 PAIR_BASE_COLS = MCA_COLS + STAT_COLS + META_COLS
 
-# Matchup-level columns (both combatants + type chart)
 MATCHUP_DERIVED_COLS = [
     "BST_Delta",
     "Offense_Delta",
@@ -48,19 +46,8 @@ FEATURE_GROUPS: dict[str, list[str]] = {
 
 
 def feature_column_names() -> list[str]:
-    """Ordered training columns (no label)."""
     cols: list[str] = []
-    for group in (
-        "mca_types_x",
-        "mca_types_y",
-        "base_stats_x",
-        "base_stats_y",
-        "meta_x",
-        "meta_y",
-        "stat_deltas",
-        "type_chart",
-        "matchup_derived",
-    ):
+    for group in FEATURE_GROUPS:
         cols.extend(FEATURE_GROUPS[group])
     return cols
 
@@ -69,7 +56,7 @@ def _load_stats() -> pd.DataFrame:
     stats = pd.read_csv(DATA_DIR / "pokemon.csv")
     stats.columns = [c.replace(" ", "_").replace(".", "") for c in stats.columns]
     stats[["Type_1", "Type_2"]] = stats[["Type_1", "Type_2"]].fillna("None")
-    stats.loc[stats.index[62], "Name"] = "Primeape"
+    stats.loc[stats.index[62], "Name"] = "Primeape"  # typo in the Kaggle export
     stats["Name"] = stats["Name"].str.lower()
     stats["MType"] = stats["Type_1"] + stats["Type_2"]
     stats["is_Legendary"] = stats["Legendary"].astype(int)
@@ -112,10 +99,7 @@ def _evolution_features(stats: pd.DataFrame) -> pd.DataFrame:
             chain_stage = 1 if row["is_baby"] == 0 else 0
             prev_chain = chain
         else:
-            if row["is_baby"] == 1:
-                chain_stage = 0
-            else:
-                chain_stage += 1
+            chain_stage = 0 if row["is_baby"] == 1 else chain_stage + 1
         stage.append(chain_stage)
     merged["Stage"] = stage
     return merged.set_index("#")[["is_Mega", "is_baby", "Stage"]]
@@ -142,8 +126,7 @@ def _build_type_effect_matrix() -> pd.DataFrame:
     cols = list(transposed.columns)
     for left in cols:
         for right in cols:
-            name = f"{left}{right}"
-            frames.append((transposed[left] * transposed[right]).rename(name))
+            frames.append((transposed[left] * transposed[right]).rename(f"{left}{right}"))
     return pd.concat(frames, axis=1)
 
 
@@ -235,8 +218,7 @@ def get_enriched_stats() -> pd.DataFrame:
 
 
 def pokemon_name(pokemon_id: int) -> str:
-    row = get_enriched_stats().loc[pokemon_id]
-    return str(row["Name"]).title()
+    return str(get_enriched_stats().loc[pokemon_id]["Name"]).title()
 
 
 def build_matchup_features(first_id: int, second_id: int) -> pd.DataFrame:
@@ -286,7 +268,6 @@ def build_combat_frame() -> pd.DataFrame:
         df[f"{stat}_Delta"] = df[f"{stat}_x"] - df[f"{stat}_y"]
 
     df = _append_matchup_derived(df)
-
     keep = ["First_Winner", "Test_Set"] + feature_column_names()
     return df[keep].copy()
 
