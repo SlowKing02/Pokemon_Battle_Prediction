@@ -7,3 +7,5 @@ outputs/
 *.cbm
 catboost_info/
 .env
+!.env.example
+!outputs/metrics.example.json

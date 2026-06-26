@@ -1,45 +1,86 @@
 # Pokémon Battle Prediction
 
-Binary classifier on 50k labeled 1v1 battles: stats, types, and a type chart in; winner out. CatBoost baseline. Optional TabPFN comparison if you have a Prior Labs token.
+Binary classifier on 50k labeled 1v1 battles. Feature engineering from the 2018 script (types, stat deltas, type chart, MCA on types); CatBoost classifier; optional TabPFN comparison on the same holdout.
 
-Grad-school side project (2018); rebuilt the pipeline in 2026 and merged the CSVs that used to live in a separate dataset repo.
+Grad-school project, rebuilt 2026. CSVs merged from the old `Pokemon_Dataset` repo.
 
-## Data
-
-All under `data/raw/`:
-
-| File | Notes |
-|------|--------|
-| `combats_test.csv` | 50k labeled rows (`Test_Set=0`); 2k Kaggle submit rows with no winner (`Test_Set=1`) |
-| `pokemon.csv` | Stats and types (`#` is row id in this file, not national dex) |
-| `chart.csv` | Type matchup multipliers |
-| `pokemon_species.csv` | Evolution metadata |
-
-## Run
+## Setup
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-python -m src.train
-python -m src.predict --a 163 --b 7   # after train; ids from pokemon.csv
 ```
 
-Holdout is a random 15% split from the 50k labeled combats (not `Test_Set=1`, which has no labels). Metrics: `outputs/metrics.json`. Model: `models/catboost.cbm`.
+## Train and evaluate
 
-TabPFN (optional): cap 10k train rows by library limits. Set `TABPFN_TOKEN` in `.env` — see `.env.example` and https://ux.priorlabs.ai
+```bash
+python -m src.train              # CatBoost + TabPFN (if TABPFN_TOKEN set)
+python -m src.train --skip-tabpfn   # CatBoost only, ~30s CPU
+python -m unittest tests.test_pipeline -v
+```
+
+**Split:** stratified 85/15 from the 50k labeled rows (`Test_Set=0`). The 2,080 `Test_Set=1` rows have no winner label (Kaggle submission export); they are ignored for metrics.
+
+**Outputs:**
+
+| Path | Contents |
+|------|----------|
+| `models/catboost.cbm` | Saved classifier |
+| `outputs/metrics.json` | Holdout metrics for CatBoost and TabPFN |
+
+Example metrics (CatBoost only): see `outputs/metrics.example.json` (~98.2% accuracy, 0.999 ROC-AUC on holdout).
+
+### TabPFN comparator
+
+TabPFN fits on at most 10,000 stratified train rows (library limit), evaluates on the **same** 7,500-row holdout as CatBoost. Requires a free Prior Labs token:
+
+1. Accept license at https://ux.priorlabs.ai  
+2. Copy API key → `TABPFN_TOKEN` in `.env` (see `.env.example`)  
+3. Re-run `python -m src.train`
+
+Training prints a side-by-side table:
+
+```text
+model        accuracy    roc_auc   log_loss
+--------------------------------------------
+catboost         0.9821     0.9987     0.0491
+tabpfn           …          …          …
+```
+
+Without a token, CatBoost still runs; `metrics.json` records the TabPFN error string.
+
+## Predict
+
+Ids are the `#` column in `data/raw/pokemon.csv` (not national dex).
+
+```bash
+python -m src.predict --a 163 --b 7
+# Mewtwo (#163) vs Charizard (#7)
+```
+
+## Data (`data/raw/`)
+
+| File | Role |
+|------|------|
+| `combats_test.csv` | Combats + `Test_Set` flag |
+| `pokemon.csv` | Stats, types |
+| `chart.csv` | Type effectiveness |
+| `pokemon_species.csv` | Evolution chains |
 
 ## Layout
 
 ```text
-src/features.py   # ETL (MCA types, stat deltas, type chart) — vectorized
-src/train.py      # CatBoost + optional TabPFN
-src/predict.py    # CLI
-legacy/           # 2018 monolith scripts
+src/features.py   build combat matrix, train/holdout helpers, single-matchup rows
+src/train.py      CatBoost train + TabPFN compare
+src/predict.py    CLI
+tests/            split + feature smoke tests
+legacy/           2018 monolith scripts (reference)
 ```
 
 ## Legacy
 
-`legacy/Pokemon_Battle_Match.py` and `legacy/CatBoost.py` are the original scripts. Use `src/` for anything new.
+`legacy/Pokemon_Battle_Match.py` — original RF/keras pipeline. `legacy/CatBoost.py` — early CatBoost on exported CSVs. Do not use for new runs.
 
 ## License
 

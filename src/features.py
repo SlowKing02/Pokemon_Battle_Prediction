@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,10 @@ import prince
 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "raw"
 
 STAT_COLS = ["HP", "Attack", "Defense", "Sp_Atk", "Sp_Def", "Speed"]
+
+MCA_COLS = [f"mca_{i}" for i in range(15)]
+META_COLS = ["is_Legendary", "is_Mega", "is_baby", "Stage"]
+PAIR_BASE_COLS = MCA_COLS + STAT_COLS + META_COLS
 
 
 def _load_stats() -> pd.DataFrame:
@@ -35,7 +40,7 @@ def _mca_type_components(stats: pd.DataFrame, n_components: int = 15) -> pd.Data
     )
     mca.fit(types)
     components = pd.DataFrame(mca.transform(types), index=stats.index)
-    components.columns = [f"mca_{i}" for i in range(components.shape[1])]
+    components.columns = MCA_COLS
     return components
 
 
@@ -51,8 +56,8 @@ def _evolution_features(stats: pd.DataFrame) -> pd.DataFrame:
     merged["is_baby"] = merged["is_baby"].fillna(0).astype(int)
     merged = merged.sort_values(["evolution_chain_id", "#"]).reset_index(drop=True)
 
-    stage = []
-    prev_chain: int | None = None
+    stage: list[int] = []
+    prev_chain: float | None = None
     chain_stage = 0
     for _, row in merged.iterrows():
         chain = row["evolution_chain_id"]
@@ -69,8 +74,8 @@ def _evolution_features(stats: pd.DataFrame) -> pd.DataFrame:
     return merged.set_index("#")[["is_Mega", "is_baby", "Stage"]]
 
 
+@lru_cache(maxsize=1)
 def _build_type_effect_matrix() -> pd.DataFrame:
-    """Expanded type chart: columns include single types and type-pair combos."""
     chart = pd.read_csv(DATA_DIR / "chart.csv")
     chart = chart.set_index("Attacking")
     chart["None"] = 1.0
@@ -86,43 +91,19 @@ def _build_type_effect_matrix() -> pd.DataFrame:
     return pd.concat(frames, axis=1)
 
 
-def _attack_effect(
-    attacker_mtype: pd.Series,
-    def_type1: pd.Series,
-    def_type2: pd.Series,
-    matrix: pd.DataFrame,
-) -> pd.Series:
-    eff1 = matrix.lookup(def_type1, attacker_mtype)
-    eff2 = matrix.lookup(def_type2, attacker_mtype)
-    return eff1 * eff2
-
-
 def _attack_effect_vectorized(
     attacker_mtype: pd.Series,
     def_type1: pd.Series,
     def_type2: pd.Series,
     matrix: pd.DataFrame,
 ) -> np.ndarray:
-    """Vectorized type effectiveness (replaces 52k-row Python loops)."""
     m = matrix.to_numpy()
     col_index = {c: i for i, c in enumerate(matrix.columns)}
     row_index = {r: i for i, r in enumerate(matrix.index)}
 
-    def lookup(series_row: pd.Series, series_col: pd.Series) -> np.ndarray:
-        out = np.ones(len(series_row), dtype=float)
-        for i, (r, c) in enumerate(zip(series_row, series_col)):
-            ri = row_index.get(r)
-            ci = col_index.get(c)
-            if ri is not None and ci is not None:
-                out[i] = m[ri, ci]
-            elif c in col_index:
-                out[i] = 1.0
-        return out
-
-    # Faster path: use .reindex + numpy indexing where keys exist
-    col_idx = attacker_mtype.map(col_index).to_numpy()
-    row1_idx = def_type1.map(row_index).to_numpy()
-    row2_idx = def_type2.map(row_index).to_numpy()
+    col_idx = attacker_mtype.map(col_index).fillna(-1).astype(int).to_numpy()
+    row1_idx = def_type1.map(row_index).fillna(-1).astype(int).to_numpy()
+    row2_idx = def_type2.map(row_index).fillna(-1).astype(int).to_numpy()
 
     valid = (col_idx >= 0) & (row1_idx >= 0) & (row2_idx >= 0)
     eff = np.ones(len(attacker_mtype), dtype=float)
@@ -130,22 +111,55 @@ def _attack_effect_vectorized(
     return eff
 
 
-def build_combat_frame() -> pd.DataFrame:
-    """Full labeled combat frame with engineered features."""
-    combats = pd.read_csv(DATA_DIR / "combats_test.csv")
+@lru_cache(maxsize=1)
+def get_enriched_stats() -> pd.DataFrame:
     stats = _load_stats()
     mca = _mca_type_components(stats)
     evo = _evolution_features(stats)
+    return pd.concat([mca.set_index(stats["#"]), stats.set_index("#"), evo], axis=1)
+
+
+def pokemon_name(pokemon_id: int) -> str:
+    row = get_enriched_stats().loc[pokemon_id]
+    return str(row["Name"]).title()
+
+
+def build_matchup_features(first_id: int, second_id: int) -> pd.DataFrame:
+    """Single-row feature matrix aligned with training columns."""
+    enriched = get_enriched_stats()
+    if first_id not in enriched.index or second_id not in enriched.index:
+        missing = [i for i in (first_id, second_id) if i not in enriched.index]
+        raise ValueError(f"Unknown pokemon id(s): {missing}")
+
+    a = enriched.loc[first_id]
+    b = enriched.loc[second_id]
+    matrix = _build_type_effect_matrix()
+
+    row: dict[str, float] = {}
+    for col in PAIR_BASE_COLS:
+        row[f"{col}_x"] = float(a[col])
+        row[f"{col}_y"] = float(b[col])
+    for stat in STAT_COLS:
+        row[f"{stat}_Delta"] = float(a[stat] - b[stat])
+
+    mtype_a = str(a["MType"])
+    mtype_b = str(b["MType"])
+
+    def eff(att_mtype: str, d1: str, d2: str) -> float:
+        e1 = matrix.at[d1, att_mtype] if d1 in matrix.index and att_mtype in matrix.columns else 1.0
+        e2 = matrix.at[d2, att_mtype] if d2 in matrix.index and att_mtype in matrix.columns else 1.0
+        return float(e1 * e2)
+
+    row["First_Attacker_Eff"] = eff(mtype_a, str(b["Type_1"]), str(b["Type_2"]))
+    row["Second_Attacker_Eff"] = eff(mtype_b, str(a["Type_1"]), str(a["Type_2"]))
+    row["First_Speed"] = float(a["Speed"] >= b["Speed"])
+    return pd.DataFrame([row])
+
+
+def build_combat_frame() -> pd.DataFrame:
+    combats = pd.read_csv(DATA_DIR / "combats_test.csv")
+    enriched = get_enriched_stats()
     effect_matrix = _build_type_effect_matrix()
-
-    base = stats.set_index("#")
-    enriched = pd.concat([mca.set_index(stats["#"]), base, evo], axis=1)
-
-    feature_cols = (
-        list(mca.columns)
-        + STAT_COLS
-        + ["is_Legendary", "is_Mega", "is_baby", "Stage"]
-    )
 
     first = enriched.add_suffix("_x")
     second = enriched.add_suffix("_y")
@@ -166,8 +180,8 @@ def build_combat_frame() -> pd.DataFrame:
 
     keep = (
         ["First_Winner", "Test_Set"]
-        + [f"{c}_x" for c in feature_cols]
-        + [f"{c}_y" for c in feature_cols]
+        + [f"{c}_x" for c in PAIR_BASE_COLS]
+        + [f"{c}_y" for c in PAIR_BASE_COLS]
         + [f"{c}_Delta" for c in STAT_COLS]
         + ["First_Attacker_Eff", "Second_Attacker_Eff", "First_Speed"]
     )
@@ -175,7 +189,6 @@ def build_combat_frame() -> pd.DataFrame:
 
 
 def labeled_combat_frame() -> pd.DataFrame:
-    """Rows with known winners (Test_Set=0). Test_Set=1 is unlabeled Kaggle holdout."""
     return build_combat_frame().query("Test_Set == 0").drop(columns=["Test_Set"]).copy()
 
 
@@ -184,7 +197,6 @@ def train_test_split_holdout(
     test_size: float = 0.15,
     random_state: int = 42,
 ) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
-    """Stratified holdout from labeled combats."""
     from sklearn.model_selection import train_test_split
 
     x = frame.drop(columns=["First_Winner"])
@@ -193,8 +205,3 @@ def train_test_split_holdout(
         x, y, test_size=test_size, stratify=y, random_state=random_state
     )
     return x_train, y_train, x_test, y_test
-
-
-def unlabeled_submission_frame() -> pd.DataFrame:
-    """Kaggle-style combats without winner labels (Test_Set=1)."""
-    return build_combat_frame().query("Test_Set == 1").drop(columns=["Test_Set", "First_Winner"])
