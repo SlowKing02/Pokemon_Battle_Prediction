@@ -25,9 +25,11 @@ Same 70 features, same holdout, three models. I wanted to see how much lift come
 |-------|----------|---------|----------|
 | Logistic regression | 0.9185 | 0.9605 | 0.2338 |
 | CatBoost | 0.9852 | 0.9990 | 0.0441 |
-| TabPFN | not run | not run | not run |
+| TabPFN | 0.9760 | 0.9977 | 0.0616 |
 
-TabPFN status: token present in local `.env`, but Prior Labs still requires a browser license acceptance before weights download. Re-run `python -m src.train` after accepting.
+TabPFN fit on 10,000 stratified train rows (library cap), same 7,500 holdout. CPU run ~6–7 min with `TABPFN_ALLOW_CPU_LARGE_DATASET=1`.
+
+TabPFN status: license accepted; prior skip was the CPU 1,000-row default limit, not auth.
 
 ### Reading the table
 

@@ -19,7 +19,10 @@
       "model_path": "models/catboost.cbm"
     },
     "tabpfn": {
-      "error": "License not accepted at ux.priorlabs.ai (token alone insufficient until browser acceptance)"
+      "accuracy": 0.976,
+      "roc_auc": 0.9977,
+      "log_loss": 0.0616,
+      "fit_rows": 10000
     }
   }
 }

@@ -79,6 +79,9 @@ def train_catboost(x_train, y_train, x_test, y_test):
 def train_tabpfn(x_train, y_train, x_test, y_test):
     from tabpfn import TabPFNClassifier
 
+    # Prior Labs gates CPU runs >1000 fit rows unless explicitly allowed.
+    os.environ.setdefault("TABPFN_ALLOW_CPU_LARGE_DATASET", "1")
+
     if len(x_train) > TABPFN_MAX_TRAIN:
         x_sub, _, y_sub, _ = train_test_split(
             x_train, y_train,
@@ -91,7 +94,7 @@ def train_tabpfn(x_train, y_train, x_test, y_test):
         x_sub, y_sub = x_train, y_train
         fit_rows = len(x_train)
 
-    clf = TabPFNClassifier(device="cpu")
+    clf = TabPFNClassifier(device="cpu", ignore_pretraining_limits=True)
     clf.fit(x_sub.astype(np.float32).to_numpy(), y_sub.to_numpy())
     proba = clf.predict_proba(x_test.astype(np.float32).to_numpy())[:, 1]
     out = _score(y_test.to_numpy(), proba)

@@ -12,9 +12,9 @@ Stratified 85/15 split on the 50k labeled rows. Same 70 features for every model
 |-------|----------|---------|----------|
 | Logistic regression | 91.85% | 0.961 | 0.234 |
 | CatBoost | **98.52%** | **0.999** | **0.044** |
-| TabPFN | pending | pending | pending |
+| TabPFN | 97.60% | 0.998 | 0.062 |
 
-TabPFN needs a Prior Labs token **and** a one-time license click at [ux.priorlabs.ai](https://ux.priorlabs.ai). Token alone was not enough in CI-style runs; accept the license in a browser, then `python -m src.train`.
+TabPFN needs a Prior Labs token and a one-time license at [ux.priorlabs.ai](https://ux.priorlabs.ai). On CPU, set `TABPFN_ALLOW_CPU_LARGE_DATASET=1` in `.env` (see `.env.example`); `train.py` sets this automatically.
 
 CatBoost is what `predict.py` loads. The logistic gap (~7pp) is the interesting part: the features already explain a lot; boosting picks up type interactions the linear model misses.
 
