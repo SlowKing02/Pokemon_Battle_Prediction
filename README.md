@@ -1,12 +1,12 @@
-# Pokémon Battle Prediction
+# pokemon_battle_prediction
 
-Grad-school side project from 2018, cleaned up in 2026. Given two Pokémon and their base stats/types, predict who wins a simulated 1v1.
+MSA side project (2018), rebuilt 2026. Given two Pokémon species and their base stats, predict who wins a simulated 1v1.
 
-The Kaggle-style dataset has 50,000 labeled fights and ~800 species (gens 1–6, megas included). Each row is just `(first_id, second_id, winner)`. No moves, no items, no abilities in the combat file. So most of the work is encoding what you *can* know from stats and the type chart before you touch a model.
+The Kaggle export has 50,000 labeled fights and ~800 species through gen 6 (megas included). Each row is `(first_id, second_id, winner)` only. No moves, items, or abilities in the combat file, so most of the signal has to come from typings, stat gaps, and the type chart.
 
-## Results (holdout, seed 42)
+## Holdout results
 
-Stratified 85/15 split on the 50k labeled rows. Same 70 features for every model.
+15% stratified holdout · seed 42 · 70 features · 42,500 train / 7,500 test
 
 | Model | Accuracy | ROC-AUC | Log loss |
 |-------|----------|---------|----------|
@@ -14,11 +14,11 @@ Stratified 85/15 split on the 50k labeled rows. Same 70 features for every model
 | CatBoost | **98.52%** | **0.999** | **0.044** |
 | TabPFN | 97.60% | 0.998 | 0.062 |
 
-TabPFN needs a Prior Labs token and a one-time license at [ux.priorlabs.ai](https://ux.priorlabs.ai). On CPU, set `TABPFN_ALLOW_CPU_LARGE_DATASET=1` in `.env` (see `.env.example`); `train.py` sets this automatically.
+Logistic regression at ~92% means the engineered columns already carry most of the story. CatBoost picks up another ~7pp from type/stat interactions. TabPFN trained on 10k rows (library cap) and scored the same holdout; it trails CatBoost slightly on this feature set.
 
-CatBoost is what `predict.py` loads. The logistic gap (~7pp) is the interesting part: the features already explain a lot; boosting picks up type interactions the linear model misses.
+`predict.py` loads the CatBoost model. TabPFN is optional; see `.env.example` for token and CPU settings.
 
-Full write-up: [docs/BENCHMARK.md](docs/BENCHMARK.md). Feature list: [docs/FEATURES.md](docs/FEATURES.md). Game/dataset notes: [docs/CONTEXT.md](docs/CONTEXT.md).
+Details: [docs/BENCHMARK.md](docs/BENCHMARK.md) · columns: [docs/FEATURES.md](docs/FEATURES.md) · dataset notes: [docs/CONTEXT.md](docs/CONTEXT.md)
 
 ## Setup
 
@@ -26,31 +26,35 @@ Full write-up: [docs/BENCHMARK.md](docs/BENCHMARK.md). Feature list: [docs/FEATU
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m src.train --skip-tabpfn
-python -m src.predict --a 163 --b 7   # mewtwo vs charizard
+python -m src.train              # all three models if TABPFN_TOKEN set
+python -m src.train --skip-tabpfn   # logistic + CatBoost only (~1 min)
+python -m src.predict --a 163 --b 7
 python -m unittest tests.test_pipeline -v
 ```
 
-## What's in the repo
+Ids in `predict.py` are the `#` column in `data/raw/pokemon.csv`, not national dex numbers.
+
+## Repo layout
 
 ```text
-src/features.py    70-column combat matrix
-src/train.py       logistic + CatBoost + optional TabPFN on same holdout
-src/predict.py     load CatBoost, score one matchup
-docs/              features, benchmark notes, pokemon context
-legacy/            original 2018 scripts
+src/features.py   build the 70-column matrix
+src/train.py      benchmark harness (logistic, CatBoost, TabPFN)
+src/predict.py    score one matchup
+docs/             feature list, benchmark notes, Pokémon context
+legacy/           2018 RF/Keras scripts for reference
+data/raw/         CSVs (combats, stats, type chart, species)
 ```
 
-## Data files (`data/raw/`)
+## Data
 
-| File | Notes |
-|------|-------|
-| `combats_test.csv` | 50k labeled + 2,080 unlabeled Kaggle rows (`Test_Set=1`, no winner) |
-| `pokemon.csv` | Base stats, types; `#` column is the id used everywhere |
+| File | Role |
+|------|------|
+| `combats_test.csv` | Labeled fights + 2,080 unlabeled Kaggle rows (`Test_Set=1`) |
+| `pokemon.csv` | Base stats and types |
 | `chart.csv` | Type effectiveness multipliers |
-| `pokemon_species.csv` | Evolution chains for stage features |
-| `pokedex.csv` | Extra fields (abilities, type resistances); not wired in yet |
+| `pokemon_species.csv` | Evolution chains (stage feature) |
+| `pokedex.csv` | Abilities and resistances; not used in the current pipeline |
 
 ## License
 
-MIT. Fan project; not affiliated with Nintendo/Creatures/Game Freak.
+MIT. Fan/research use. Not affiliated with Nintendo, Creatures, or Game Freak.

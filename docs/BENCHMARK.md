@@ -1,6 +1,6 @@
-# Benchmark notes
+# Benchmark
 
-Same 70 features, same holdout, three models. I wanted to see how much lift comes from feature work vs model choice.
+Same feature matrix and holdout for every model. The question I cared about: after hand-engineering types and stats, how much does the classifier still matter?
 
 ## Split
 
@@ -9,17 +9,17 @@ Same 70 features, same holdout, three models. I wanted to see how much lift come
 | Labeled rows | 50,000 (`Test_Set=0`) |
 | Train | 42,500 |
 | Holdout | 7,500 (15%, stratified, seed 42) |
-| Ignored | 2,080 `Test_Set=1` rows (no winner in Kaggle export) |
+| Excluded | 2,080 `Test_Set=1` rows (Kaggle export with no winner label) |
 
 ## Models
 
-**Logistic regression** — `StandardScaler` + sklearn LR. Linear read on whether the engineered columns already separate winners.
+**Logistic regression** — standardized features, sklearn LR. Sanity check for linear separability.
 
-**CatBoost** — 300 trees, depth 8, lr 0.08, early stop on holdout AUC. Saved to `models/catboost.cbm`.
+**CatBoost** — 300 iterations, depth 8, learning rate 0.08, early stopping on holdout AUC. Saved to `models/catboost.cbm`.
 
-**TabPFN** — optional; fits on 10k stratified train rows max, same holdout. Needs token + license acceptance at [ux.priorlabs.ai](https://ux.priorlabs.ai).
+**TabPFN** — optional Prior Labs comparator. Fits on up to 10,000 stratified train rows, evaluates on the same 7,500 holdout. Needs `TABPFN_TOKEN` and a one-time license at [ux.priorlabs.ai](https://ux.priorlabs.ai). CPU runs need `TABPFN_ALLOW_CPU_LARGE_DATASET=1` (set in `.env.example`; `train.py` applies it).
 
-## Results (2026-06-22 run)
+## Results (June 2026)
 
 | Model | Accuracy | ROC-AUC | Log loss |
 |-------|----------|---------|----------|
@@ -27,22 +27,14 @@ Same 70 features, same holdout, three models. I wanted to see how much lift come
 | CatBoost | 0.9852 | 0.9990 | 0.0441 |
 | TabPFN | 0.9760 | 0.9977 | 0.0616 |
 
-TabPFN fit on 10,000 stratified train rows (library cap), same 7,500 holdout. CPU run ~6–7 min with `TABPFN_ALLOW_CPU_LARGE_DATASET=1`.
+TabPFN on CPU took about six minutes for the 10k fit + holdout score.
 
-TabPFN status: license accepted; prior skip was the CPU 1,000-row default limit, not auth.
-
-### Reading the table
-
-Logistic at ~92% means the type chart + stat deltas carry real signal without interactions. CatBoost adds ~6.7pp accuracy, mostly from nonlinear type/stat combos. Log loss drops hard (0.23 → 0.04), so probabilities tighten up too.
+Log loss drops from 0.23 (logistic) to 0.04 (CatBoost), so probabilities tighten as well as hard accuracy.
 
 ## Reproduce
 
 ```bash
-python -m src.train --skip-tabpfn
+python -m src.train
 ```
 
-Writes `outputs/metrics.json`. Committed snapshot: `outputs/metrics.example.json`.
-
-## Add another model
-
-Drop a `train_<name>()` in `src/train.py`, register it in `benchmarks` and `_print_table`, re-run, update the example json.
+Writes `outputs/metrics.json`. Checked-in snapshot: `outputs/metrics.example.json`.

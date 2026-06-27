@@ -1,6 +1,6 @@
-Original 2018 scripts. I keep them to diff against when something in `src/features.py` looks wrong.
+2018 scripts kept for comparison when debugging `src/features.py`.
 
-- `Pokemon_Battle_Match.py` — RF / Keras version
-- `CatBoost.py` — early CatBoost on exported CSVs
+- `Pokemon_Battle_Match.py` — random forest / Keras version from grad school
+- `CatBoost.py` — early CatBoost run on exported feature CSVs
 
-Use `python -m src.train` from the repo root now.
+Current entry point: `python -m src.train`
